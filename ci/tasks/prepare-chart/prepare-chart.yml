@@ -1,0 +1,31 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: linkyard/concourse-helm-resource
+    tag: "2.11.0-1"
+
+inputs:
+  - name: chart-source
+  - name: version
+
+outputs:
+  - name: final-helm-charts
+
+params:
+  chart_name:
+
+run:
+  path: bash
+  args:
+  - -exc
+  - |
+    helm init --client-only
+    ls -ls version
+    VERSION=$(cat version/version/numbers)
+    cp -a chart-source $chart_name
+    helm package $chart_name -d final-helm-charts --version $VERSION
+    # Disabling lint until https://github.com/helm/helm/issues/4949 is fix 
+    # helm lint  final-helm-charts

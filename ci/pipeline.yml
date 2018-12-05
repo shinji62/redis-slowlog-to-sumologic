@@ -1,0 +1,66 @@
+resources:
+- name: redis-forwarder-master
+  type: git
+  source:
+    uri: git@github.com:shinji62/redis-slowlog-to-sumologic.git
+    branch: master
+    private_key: {{private-key-github-concourse}}
+
+- name: version
+  type: semver
+  source:
+    driver: git
+    uri: git@github.com:shinji62/redis-slowlog-to-sumologic.git
+    branch: version
+    file: version
+    private_key: {{private-key-github-concourse}}
+    git_user: {{concourse-user-gitinfo}}
+
+
+
+jobs:
+- name: Unit-Testing-master
+  plan:
+  - aggregate:
+    - get: redis-forwarder-master
+  - task: unit-testing
+    file: redis-forwarder-master/ci/unit-testing/unit-testing.yml
+
+- name: release-tag-master
+  public: true
+  serial: true
+  plan:
+  - aggregate:
+    - get: redis-forwarder-master
+      passed:
+      - Unit-Testing-master
+  - put: version
+    params: {bump: patch}
+  - put: redis-forwarder-master
+    params:
+      only_tag: true
+      repository: redis-forwarder-master
+      tag: version/number
+
+
+- name: github-release
+  public: true
+  serial: true
+  plan:
+  - aggregate:
+    - get: redis-forwarder-master
+      passed:
+      - release-tag-master
+      trigger: true
+    - get: version
+  - task: build-binary
+    file: redis-forwarder-master/ci/build-binary.yml
+    params:
+      VERSION_APP: version/number
+      COMMIT_SHA1: redis-forwarder-master/.git/ref
+  - put: gh-release
+    params :
+      name: version/number
+      tag: version/number
+      globs:
+      - binary-builded/*
