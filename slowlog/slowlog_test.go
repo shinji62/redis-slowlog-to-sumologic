@@ -72,7 +72,7 @@ func TestNewRedis(t *testing.T) {
 
 func TestFetchSlowLog(t *testing.T) {
 	conn := redigomock.NewConn()
-	cmd := conn.Command("SLOWLOG", "GET").Expect(slowlogResult)
+	cmd := conn.Command("SLOWLOG", "GET", "100").Expect(slowlogResult)
 	sl := NewSlowLog(conn)
 	result, err := sl.FetchSlowLog()
 	fmt.Println(conn.Stats(cmd))

@@ -4,9 +4,7 @@
 *.dll
 *.so
 *.dylib
-forwarder
-final-helm-charts
-version-test
+/forwarder
 
 # Test binary, build with `go test -c`
 *.test

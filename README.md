@@ -2,6 +2,8 @@
 
 Nifty tool which collect the SLOWLOG from redis server and forward to SumoLogic
 
+This tool use Go modules and is compiled with Go 1.11.X
+
 ## Usage
 Just run `forwarder --help` to get the latest help
 
@@ -22,17 +24,22 @@ Flags:
   --version                      Show application version.
 
 ```
+## Environment Variable
+This application support Environment variable only for
+
+* Redis password `REDIS_PASSWORD`
+* Redis server `REDIS_SERVER`
 
 
 ## Build
 
 ```
-go build cmd/forwarder/forwarder.go
+go build cmd/forwarder/main.go '-mod=vendor'
 ```
 
 ## Test
 ```
-go test ./... -v
+go test ./... -mod=vendor -v
 ```
 
 

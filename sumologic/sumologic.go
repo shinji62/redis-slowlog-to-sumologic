@@ -33,6 +33,7 @@ func NewSumoLogic(url string, host string, name string, category string, expVers
 		sumoHost:         host,
 		sumoName:         name,
 		sumoURL:          url,
+		sumoCategory:     category,
 		httpClient:       http.Client{Timeout: connectionTimeOut},
 	}
 }
