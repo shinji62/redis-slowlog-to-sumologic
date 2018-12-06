@@ -29,4 +29,4 @@ run:
     export SHA1=`[ ${COMMIT_SHA1} ] && cat ${COMMIT_SHA1} || echo "000000000"`
     export DATE=$(date +%Y_%m_%d)
     cd source-code/
-    CGO_ENABLED=0 GO111MODULE=on GOOS=linux go build '-mod=vendor'  -ldflags  " -X main.version=$BUILD_NUMBER -X main.commit_sha1=$SHA1 -X main.builddate=$DATE " -a -installsuffix cgo -o ../binary-builded/redis-forwarder-to-sumologic cmd/forwarder/main.go
+    CGO_ENABLED=0 GO111MODULE=on GOOS=linux go build '-mod=vendor'  -ldflags  " -X main.version=$BUILD_NUMBER -X main.commit_sha1=$SHA1 -X main.builddate=$DATE " -a -installsuffix cgo -o ../binary-builded/redis-sl-fwd-to-sumologic cmd/forwarder/main.go
