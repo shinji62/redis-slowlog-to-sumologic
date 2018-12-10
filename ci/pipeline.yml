@@ -16,15 +16,29 @@ resources:
     private_key: {{private-key-github-concourse}}
     git_user: {{concourse-user-gitinfo}}
 
+- name: gh-release
+  type: github-release
+  source:
+    user: shinji62
+    repository: redis-slowlog-to-sumologic
+    access_token: {{github-access-token}}
 
+- name: redis-forwarder-docker-image
+  type: docker-image
+  source:
+    repository: quoinedev/redis-sl-fwd-sumologic
+    username: {{username-docker-hub}}
+    password: {{password-docker-hub}}
 
 jobs:
 - name: Unit-Testing-master
   plan:
   - aggregate:
     - get: redis-forwarder-master
+      trigger: true
   - task: unit-testing
-    file: redis-forwarder-master/ci/unit-testing/unit-testing.yml
+    input_mapping: {source-code: redis-forwarder-master}
+    file: redis-forwarder-master/ci/tasks/unit-testing/unit-testing.yml
 
 - name: release-tag-master
   public: true
@@ -40,10 +54,9 @@ jobs:
     params:
       only_tag: true
       repository: redis-forwarder-master
-      tag: version/number
+      tag: version/version
 
-
-- name: github-release
+- name: ship-it
   public: true
   serial: true
   plan:
@@ -54,13 +67,18 @@ jobs:
       trigger: true
     - get: version
   - task: build-binary
-    file: redis-forwarder-master/ci/build-binary.yml
+    input_mapping: {source-code: redis-forwarder-master}
+    file: redis-forwarder-master/ci/tasks/build-binary/build-binary.yml
     params:
-      VERSION_APP: version/number
+      VERSION_APP: version/version
       COMMIT_SHA1: redis-forwarder-master/.git/ref
   - put: gh-release
     params :
-      name: version/number
-      tag: version/number
+      name: version/version
+      tag: version/version
       globs:
-      - binary-builded/*
+      - binary-builded/redis-sl-fwd-to-sumologic
+  - put: redis-forwarder-docker-image
+    params:
+      dockerfile: redis-forwarder-master/Dockerfile
+      build: binary-builded/

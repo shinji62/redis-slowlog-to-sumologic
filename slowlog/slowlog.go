@@ -32,9 +32,9 @@ func NewSlowLog(conn redis.Conn) *slowLog {
 	}
 }
 
-func (s *slowLog) FetchSlowLog() ([]SlowLogData, error) {
+func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 	var slowLogArr []SlowLogData
-	results, err := redis.Values(s.Conn.Do("SLOWLOG", "GET", "100"))
+	results, err := redis.Values(s.Conn.Do("SLOWLOG", "GET", size))
 	if err != nil {
 		fmt.Println(err)
 		return slowLogArr, err

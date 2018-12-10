@@ -21,6 +21,7 @@ var (
 	alias           = kingpin.Flag("env-alias", "Environment alias use for Prometheus metrics(qa,prod,...)").Required().String()
 	rAddr           = kingpin.Flag("redis.server", "Redis server address").Required().Envar("REDIS_SERVER").String()
 	rPassword       = kingpin.Flag("redis.password", "Password for Redis").Required().Envar("REDIS_PASSWORD").String()
+	rsizeSlowLog    = kingpin.Flag("redis.slowlog", "Numbers of SlowLog to fetch (default 100)").Envar("REDIS_SLOWLOG").Default("100").Int()
 	qInterval       = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Default("10s").Duration()
 	sURL            = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().String()
 	sSourceCategory = kingpin.Flag("sumologic.source.category", "Override default Source Category").Default("").String()
@@ -117,7 +118,7 @@ func main() {
 		select {
 		case <-ticker.C:
 
-			slowLogResult, err := r.FetchSlowLog()
+			slowLogResult, err := r.FetchSlowLog(*rsizeSlowLog)
 			if err != nil {
 				slowLogErrorProcessed.Inc()
 				logging.Error.Println(err)
