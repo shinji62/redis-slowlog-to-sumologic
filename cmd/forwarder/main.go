@@ -18,13 +18,13 @@ import (
 )
 
 var (
-	alias           = kingpin.Flag("env-alias", "Environment alias use for Prometheus metrics(qa,prod,...)").Required().String()
+	alias           = kingpin.Flag("env-alias", "Environment alias use for Prometheus metrics(qa,prod,...)").Envar("ENV_ALIAS").Required().String()
 	rAddr           = kingpin.Flag("redis.server", "Redis server address").Required().Envar("REDIS_SERVER").String()
 	rPassword       = kingpin.Flag("redis.password", "Password for Redis").Required().Envar("REDIS_PASSWORD").String()
 	rsizeSlowLog    = kingpin.Flag("redis.slowlog", "Numbers of SlowLog to fetch (default 100)").Envar("REDIS_SLOWLOG").Default("100").Int()
-	qInterval       = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Default("10s").Duration()
-	sURL            = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().String()
-	sSourceCategory = kingpin.Flag("sumologic.source.category", "Override default Source Category").Default("").String()
+	qInterval       = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Envar("SUMOLOGIC_QUERY_INT").Default("10s").Duration()
+	sURL            = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().Envar("SUMOLOGIC_URL").String()
+	sSourceCategory = kingpin.Flag("sumologic.source.category", "Override default Source Category").Envar("SUMOLOGIC_CAT").Default("").String()
 	sSourceName     = kingpin.Flag("sumologic.source.name", "Override default Source Name").Default("").String()
 	sSourceHost     = kingpin.Flag("sumologic.source.host", "Override default Source Host").Default("").String()
 	listenAddress   = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9121").String()
