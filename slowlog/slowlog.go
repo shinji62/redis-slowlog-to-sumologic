@@ -1,8 +1,10 @@
 package slowlog
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gomodule/redigo/redis"
 )
@@ -11,6 +13,7 @@ const (
 	MAX_ARGS = 10
 )
 
+// SlowLogData redis slowlog return data structure
 type SlowLogData struct {
 	Id            int64
 	Timestamp     int64
@@ -22,14 +25,40 @@ type SlowLogData struct {
 	ClientName    string
 }
 
+type idMap map[int64]bool
+
 type slowLog struct {
 	Conn redis.Conn
+
+	processedIDs idMap
+	ctx          context.Context
+	cancel       context.CancelFunc
 }
 
-func NewSlowLog(conn redis.Conn) *slowLog {
-	return &slowLog{
-		Conn: conn,
+func (m *idMap) clearEvery(ctx context.Context, t time.Duration) {
+	// this will clear the duplication map every specified duration
+	// this func is blocking, use `go m.clearEvery(...)` instead
+	tickTock := time.NewTicker(t)
+	for {
+		select {
+		case <-tickTock.C:
+			(*m) = idMap{}
+		case <-ctx.Done():
+			fmt.Print(ctx.Err())
+			return
+		}
 	}
+}
+
+// NewSlowLog create a new slowlog service instance
+func NewSlowLog(conn redis.Conn, clearDupsDuration time.Duration) *slowLog {
+	sl := &slowLog{
+		Conn:         conn,
+		processedIDs: idMap{},
+	}
+	sl.ctx, sl.cancel = context.WithCancel(context.Background())
+	go sl.processedIDs.clearEvery(sl.ctx, clearDupsDuration)
+	return sl
 }
 
 func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
@@ -49,7 +78,7 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 		var log SlowLogData
 		var args []string
 		if len(entry) > 5 {
-			redis.Scan(entry,
+			_, err = redis.Scan(entry,
 				&log.Id,
 				&log.Timestamp,
 				&log.Duration,
@@ -57,14 +86,20 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 				&log.ClientAddress,
 				&log.ClientName)
 		} else {
-			redis.Scan(entry,
+			_, err = redis.Scan(entry,
 				&log.Id,
 				&log.Timestamp,
 				&log.Duration,
-				nil,
 				&args)
 		}
-
+		if err != nil {
+			fmt.Println(fmt.Sprintf("Error during redis.Scan: %v", err))
+			continue
+		}
+		if dup, ok := s.processedIDs[log.Id]; dup && ok {
+			fmt.Println(fmt.Sprintf("Skipping SlowLog(id=%v)!", log.Id))
+			continue
+		}
 		// This splits up the args into cmd, key, args.
 		argsLen := len(args)
 		if argsLen > 0 {
@@ -84,6 +119,7 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 
 			}
 		}
+		s.processedIDs[log.Id] = true
 		slowLogArr = append(slowLogArr, log)
 	}
 	return slowLogArr, err
@@ -99,4 +135,11 @@ func (s *slowLog) Ping() bool {
 		return true
 	}
 	return false
+}
+
+// Destroy close all goroutines and destroy the service
+func (s *slowLog) Destroy() {
+	s.cancel()
+	s.Conn.Close()
+	s = nil
 }
