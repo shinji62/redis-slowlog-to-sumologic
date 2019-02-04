@@ -8,21 +8,26 @@ This tool use Go modules and is compiled with Go 1.11.X
 Just run `forwarder --help` to get the latest help
 
 ```bash
-usage: forwarder --redis-server=REDIS-SERVER --redis-password=REDIS-PASSWORD --sumologic-url=SUMOLOGIC-URL [<flags>]
+usage: forwarder --env-alias=ENV-ALIAS --redis.server=REDIS.SERVER --redis.password=REDIS.PASSWORD --sumologic.url=SUMOLOGIC.URL [<flags>]
 
 Flags:
   --help                         Show context-sensitive help (also try --help-long and --help-man).
-  --redis-server=REDIS-SERVER    Redis server address
-  --redis-password=REDIS-PASSWORD
+  --env-alias=ENV-ALIAS          Environment alias use for Prometheus metrics(qa,prod,...)
+  --redis.server=REDIS.SERVER    Redis server address
+  --redis.password=REDIS.PASSWORD
                                  Password for Redis
+  --redis.slowlog=100            Numbers of SlowLog to fetch (default 100)
   --query-interval=10s           Redis SlowLog interval Query
-  --sumologic-url=SUMOLOGIC-URL  SumoLogic Collector URL as give by SumoLogic
-  --sumologic-source-category=""
+  --dups-clear-interval=60s      Interval which duplicate cache is cleared
+  --sumologic.url=SUMOLOGIC.URL  SumoLogic Collector URL as give by SumoLogic
+  --sumologic.source.category=""
                                  Override default Source Category
-  --sumologic-source-name=""     Override default Source Name
-  --sumologic-source-host=""     Override default Source Host
+  --sumologic.source.name=""     Override default Source Name
+  --sumologic.source.host=""     Override default Source Host
+  --web.listen-address=":9121"   Address to listen on for web interface and telemetry.
+  --web.telemetry-path="/metrics"
+                                 Path under which to expose metrics.
   --version                      Show application version.
-
 ```
 ## Environment Variable
 This application support Environment variable only for
