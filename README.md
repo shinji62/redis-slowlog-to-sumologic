@@ -49,7 +49,8 @@ go test ./... -mod=vendor -v
 
 
 ## Todo
-  [] Add Buffer to avoid to much pressure
-  [] Put retrieve/sending into GoRoutine
-  [] More test coverage
-  [] Dedup. before sending SumoLogic
+
+  - [x] Add Buffer to avoid to much pressure  
+  - [ ] Put retrieve/sending into GoRoutine  
+  - [ ] More test coverage  
+  - [x] Dedup. before sending SumoLogic  
