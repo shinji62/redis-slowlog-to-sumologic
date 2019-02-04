@@ -18,7 +18,7 @@ Flags:
                                  Password for Redis
   --redis.slowlog=100            Numbers of SlowLog to fetch (default 100)
   --query-interval=10s           Redis SlowLog interval Query
-  --dups-clear-interval=60s      Interval which duplicate cache is cleared
+  --dups-cache-ttl=60s      Interval which duplicate cache is cleared
   --sumologic.url=SUMOLOGIC.URL  SumoLogic Collector URL as give by SumoLogic
   --sumologic.source.category=""
                                  Override default Source Category
