@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -33,16 +34,19 @@ type slowLog struct {
 	processedIDs idMap
 	ctx          context.Context
 	cancel       context.CancelFunc
+	mutex        *sync.Mutex
 }
 
-func (m *idMap) clearEvery(ctx context.Context, t time.Duration) {
+func (m *idMap) clearEvery(ctx context.Context, mtx *sync.Mutex, t time.Duration) {
 	// this will clear the duplication map every specified duration
 	// this func is blocking, use `go m.clearEvery(...)` instead
 	tickTock := time.NewTicker(t)
 	for {
 		select {
 		case <-tickTock.C:
+			mtx.Lock()
 			(*m) = idMap{}
+			mtx.Unlock()
 		case <-ctx.Done():
 			fmt.Print(ctx.Err())
 			return
@@ -55,10 +59,24 @@ func NewSlowLog(conn redis.Conn, clearDupsDuration time.Duration) *slowLog {
 	sl := &slowLog{
 		Conn:         conn,
 		processedIDs: idMap{},
+		mutex:        &sync.Mutex{},
 	}
 	sl.ctx, sl.cancel = context.WithCancel(context.Background())
-	go sl.processedIDs.clearEvery(sl.ctx, clearDupsDuration)
+	go sl.processedIDs.clearEvery(sl.ctx, sl.mutex, clearDupsDuration)
 	return sl
+}
+
+func (s *slowLog) markID(id int64) {
+	s.mutex.Lock()
+	s.processedIDs[id] = true
+	s.mutex.Unlock()
+}
+
+func (s *slowLog) isIDExisting(id int64) bool {
+	s.mutex.Lock()
+	dup, ok := s.processedIDs[id]
+	s.mutex.Unlock()
+	return dup && ok
 }
 
 func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
@@ -96,7 +114,7 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 			fmt.Println(fmt.Sprintf("Error during redis.Scan: %v", err))
 			continue
 		}
-		if dup, ok := s.processedIDs[log.Id]; dup && ok {
+		if s.isIDExisting(log.Id) {
 			fmt.Println(fmt.Sprintf("Skipping SlowLog(id=%v)!", log.Id))
 			continue
 		}
@@ -119,7 +137,7 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 
 			}
 		}
-		s.processedIDs[log.Id] = true
+		s.markID(log.Id)
 		slowLogArr = append(slowLogArr, log)
 	}
 	return slowLogArr, err
