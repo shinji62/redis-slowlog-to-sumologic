@@ -25,7 +25,7 @@ var (
 	rPassword        = kingpin.Flag("redis.password", "Password for Redis").Required().Envar("REDIS_PASSWORD").String()
 	rsizeSlowLog     = kingpin.Flag("redis.slowlog", "Numbers of SlowLog to fetch (default 100)").Envar("REDIS_SLOWLOG").Default("100").Int()
 	qInterval        = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Envar("SUMOLOGIC_QUERY_INT").Default("10s").Duration()
-	dupClearInterval = kingpin.Flag("dups-clear-interval", "Interval which duplicate cache is cleared").Envar("SUMOLOGIC_QUERY_INT").Default("60s").Duration()
+	dupClearInterval = kingpin.Flag("dups-cache-ttl", "Interval which duplicate cache is cleared").Envar("SUMOLOGIC_QUERY_INT").Default("60s").Duration()
 	sURL             = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().Envar("SUMOLOGIC_URL").String()
 	sSourceCategory  = kingpin.Flag("sumologic.source.category", "Override default Source Category").Envar("SUMOLOGIC_CAT").Default("").String()
 	sSourceName      = kingpin.Flag("sumologic.source.name", "Override default Source Name").Default("").String()
