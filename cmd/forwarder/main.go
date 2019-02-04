@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime"
 	"time"
 
@@ -112,26 +114,52 @@ func main() {
 		logging.Error.Fatal(http.ListenAndServe(*listenAddress, nil))
 	}()
 
-	//Ticker for X sec we query the SlowLog from Redis
-	ticker := time.NewTicker(*qInterval)
-	for {
-		select {
-		case <-ticker.C:
+	q := make(chan os.Signal)
+	signal.Notify(q, os.Interrupt)
+	ctx, cancelf := context.WithCancel(context.Background())
 
-			slowLogResult, err := r.FetchSlowLog(*rsizeSlowLog)
-			if err != nil {
-				slowLogErrorProcessed.Inc()
-				logging.Error.Println(err)
-				continue
+	slowLogsResults := make(chan []slowlog.SlowLogData)
+	// get slowLogs and send to SumoLogic forwarder
+	go func(c chan []slowlog.SlowLogData, ctx context.Context) {
+		//Ticker for X sec we query the SlowLog from Redis
+		ticker := time.NewTicker(*qInterval)
+		for {
+			select {
+			case <-ticker.C:
+
+				slowLogResult, err := r.FetchSlowLog(*rsizeSlowLog)
+				if err != nil {
+					slowLogErrorProcessed.Inc()
+					logging.Error.Println(err)
+					continue
+				}
+				c <- slowLogResult
+			case <-ctx.Done():
+				fmt.Print(ctx.Err())
+				return
 			}
-
-			for _, sLog := range slowLogResult {
-				formated := sClient.FormatEvents(sLog)
-				slowLogProcessed.Inc()
-				go sClient.SendLogs(formated)
-			}
-
 		}
-	}
+	}(slowLogsResults, ctx)
 
+	// receive logs from channel and send it via the forwarder
+	go func(c <-chan []slowlog.SlowLogData, ctx context.Context) {
+		for {
+			select {
+			case sLogs := <-c:
+				for _, sLog := range sLogs {
+					formated := sClient.FormatEvents(sLog)
+					slowLogProcessed.Inc()
+					go sClient.SendLogs(formated)
+				}
+			case <-ctx.Done():
+				fmt.Print(ctx.Err())
+				return
+			}
+		}
+	}(slowLogsResults, ctx)
+
+	<-q
+	close(slowLogsResults)
+	cancelf()
+	fmt.Print("Forwarder quitting...")
 }
