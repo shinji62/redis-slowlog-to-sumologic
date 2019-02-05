@@ -2,12 +2,12 @@ package slowlog
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/shinji62/redis-slowlog-to-sumologic/logging"
 )
 
 const (
@@ -48,7 +48,7 @@ func (m *idMap) clearEvery(ctx context.Context, mtx *sync.Mutex, t time.Duration
 			(*m) = idMap{}
 			mtx.Unlock()
 		case <-ctx.Done():
-			fmt.Print(ctx.Err())
+			logging.Info.Println(ctx.Err())
 			return
 		}
 	}
@@ -83,13 +83,13 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 	var slowLogArr []SlowLogData
 	results, err := redis.Values(s.Conn.Do("SLOWLOG", "GET", size))
 	if err != nil {
-		fmt.Println(err)
+		logging.Error.Println(err)
 		return slowLogArr, err
 	}
 	for _, item := range results {
 		entry, err := redis.Values(item, nil)
 		if err != nil {
-			fmt.Println(err)
+			logging.Error.Println(err)
 			continue
 		}
 
@@ -111,11 +111,11 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 				&args)
 		}
 		if err != nil {
-			fmt.Println(fmt.Sprintf("Error during redis.Scan: %v", err))
+			logging.Error.Printf("Error during redis.Scan: %v", err)
 			continue
 		}
 		if s.isIDExisting(log.Id) {
-			fmt.Println(fmt.Sprintf("Skipping SlowLog(id=%v)!", log.Id))
+			logging.Warning.Printf("Skipping SlowLog(id=%v)!", log.Id)
 			continue
 		}
 		// This splits up the args into cmd, key, args.

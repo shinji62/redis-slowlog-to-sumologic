@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -32,6 +33,9 @@ var (
 	sSourceHost      = kingpin.Flag("sumologic.source.host", "Override default Source Host").Default("").String()
 	listenAddress    = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9121").String()
 	metricPath       = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+
+	logs     = kingpin.Flag("log", logsHelp).Short('l').Default(logging.LevelsInSlice[3], logging.LevelsInSlice[1]).Enums(logging.LevelsInSlice[0:]...)
+	logsHelp = fmt.Sprintf("Log levels: -l %s", strings.Join(logging.LevelsInSlice[0:], " -l "))
 )
 
 const (
@@ -46,11 +50,11 @@ var (
 )
 
 func main() {
-	//logging init
-	logging.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
-
 	kingpin.Version(version)
 	kingpin.Parse()
+
+	//logging init
+	logging.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr, logging.SliceToLevels(*logs))
 
 	//Connect to redis server
 	rConnection, err := redis.Dial("tcp", *rAddr,
