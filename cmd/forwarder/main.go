@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gomodule/redigo/redis"
@@ -20,17 +21,21 @@ import (
 )
 
 var (
-	alias           = kingpin.Flag("env-alias", "Environment alias use for Prometheus metrics(qa,prod,...)").Envar("ENV_ALIAS").Required().String()
-	rAddr           = kingpin.Flag("redis.server", "Redis server address").Required().Envar("REDIS_SERVER").String()
-	rPassword       = kingpin.Flag("redis.password", "Password for Redis").Required().Envar("REDIS_PASSWORD").String()
-	rsizeSlowLog    = kingpin.Flag("redis.slowlog", "Numbers of SlowLog to fetch (default 100)").Envar("REDIS_SLOWLOG").Default("100").Int()
-	qInterval       = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Envar("SUMOLOGIC_QUERY_INT").Default("10s").Duration()
-	sURL            = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().Envar("SUMOLOGIC_URL").String()
-	sSourceCategory = kingpin.Flag("sumologic.source.category", "Override default Source Category").Envar("SUMOLOGIC_CAT").Default("").String()
-	sSourceName     = kingpin.Flag("sumologic.source.name", "Override default Source Name").Default("").String()
-	sSourceHost     = kingpin.Flag("sumologic.source.host", "Override default Source Host").Default("").String()
-	listenAddress   = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9121").String()
-	metricPath      = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+	alias            = kingpin.Flag("env-alias", "Environment alias use for Prometheus metrics(qa,prod,...)").Envar("ENV_ALIAS").Required().String()
+	rAddr            = kingpin.Flag("redis.server", "Redis server address").Required().Envar("REDIS_SERVER").String()
+	rPassword        = kingpin.Flag("redis.password", "Password for Redis").Required().Envar("REDIS_PASSWORD").String()
+	rsizeSlowLog     = kingpin.Flag("redis.slowlog", "Numbers of SlowLog to fetch (default 100)").Envar("REDIS_SLOWLOG").Default("100").Int()
+	qInterval        = kingpin.Flag("query-interval", "Redis SlowLog interval Query").Envar("SUMOLOGIC_QUERY_INT").Default("10s").Duration()
+	dupClearInterval = kingpin.Flag("dups-cache-ttl", "Interval which duplicate cache is cleared").Envar("SUMOLOGIC_QUERY_INT").Default("60s").Duration()
+	sURL             = kingpin.Flag("sumologic.url", "SumoLogic Collector URL as give by SumoLogic").Required().Envar("SUMOLOGIC_URL").String()
+	sSourceCategory  = kingpin.Flag("sumologic.source.category", "Override default Source Category").Envar("SUMOLOGIC_CAT").Default("").String()
+	sSourceName      = kingpin.Flag("sumologic.source.name", "Override default Source Name").Default("").String()
+	sSourceHost      = kingpin.Flag("sumologic.source.host", "Override default Source Host").Default("").String()
+	listenAddress    = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9121").String()
+	metricPath       = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+
+	logs     = kingpin.Flag("log", logsHelp).Short('l').Default(logging.LevelsInSlice[3], logging.LevelsInSlice[1]).Enums(logging.LevelsInSlice[0:]...)
+	logsHelp = fmt.Sprintf("Log levels: -l %s", strings.Join(logging.LevelsInSlice[0:], " -l "))
 )
 
 const (
@@ -45,11 +50,11 @@ var (
 )
 
 func main() {
-	//logging init
-	logging.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr)
-
 	kingpin.Version(version)
 	kingpin.Parse()
+
+	//logging init
+	logging.Init(ioutil.Discard, os.Stdout, os.Stdout, os.Stderr, logging.SliceToLevels(*logs))
 
 	//Connect to redis server
 	rConnection, err := redis.Dial("tcp", *rAddr,
@@ -63,7 +68,7 @@ func main() {
 		os.Exit(ExitCodeError)
 	}
 
-	r := slowlog.NewSlowLog(rConnection)
+	r := slowlog.NewSlowLog(rConnection, *dupClearInterval)
 	sClient := sumologic.NewSumoLogic(
 		*sURL,
 		*sSourceHost,

@@ -1,16 +1,20 @@
 package slowlog
 
 import (
-	"fmt"
+	"context"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/shinji62/redis-slowlog-to-sumologic/logging"
 )
 
 const (
 	MAX_ARGS = 10
 )
 
+// SlowLogData redis slowlog return data structure
 type SlowLogData struct {
 	Id            int64
 	Timestamp     int64
@@ -22,34 +26,77 @@ type SlowLogData struct {
 	ClientName    string
 }
 
+type idMap map[int64]bool
+
 type slowLog struct {
 	Conn redis.Conn
+
+	processedIDs idMap
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mutex        *sync.Mutex
 }
 
-func NewSlowLog(conn redis.Conn) *slowLog {
-	return &slowLog{
-		Conn: conn,
+func (m *idMap) clearEvery(ctx context.Context, mtx *sync.Mutex, t time.Duration) {
+	// this will clear the duplication map every specified duration
+	// this func is blocking, use `go m.clearEvery(...)` instead
+	tickTock := time.NewTicker(t)
+	for {
+		select {
+		case <-tickTock.C:
+			mtx.Lock()
+			(*m) = idMap{}
+			mtx.Unlock()
+		case <-ctx.Done():
+			logging.Info.Println(ctx.Err())
+			return
+		}
 	}
+}
+
+// NewSlowLog create a new slowlog service instance
+func NewSlowLog(conn redis.Conn, clearDupsDuration time.Duration) *slowLog {
+	sl := &slowLog{
+		Conn:         conn,
+		processedIDs: idMap{},
+		mutex:        &sync.Mutex{},
+	}
+	sl.ctx, sl.cancel = context.WithCancel(context.Background())
+	go sl.processedIDs.clearEvery(sl.ctx, sl.mutex, clearDupsDuration)
+	return sl
+}
+
+func (s *slowLog) markID(id int64) {
+	s.mutex.Lock()
+	s.processedIDs[id] = true
+	s.mutex.Unlock()
+}
+
+func (s *slowLog) isIDExisting(id int64) bool {
+	s.mutex.Lock()
+	dup, ok := s.processedIDs[id]
+	s.mutex.Unlock()
+	return dup && ok
 }
 
 func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 	var slowLogArr []SlowLogData
 	results, err := redis.Values(s.Conn.Do("SLOWLOG", "GET", size))
 	if err != nil {
-		fmt.Println(err)
+		logging.Error.Println(err)
 		return slowLogArr, err
 	}
 	for _, item := range results {
 		entry, err := redis.Values(item, nil)
 		if err != nil {
-			fmt.Println(err)
+			logging.Error.Println(err)
 			continue
 		}
 
 		var log SlowLogData
 		var args []string
 		if len(entry) > 5 {
-			redis.Scan(entry,
+			_, err = redis.Scan(entry,
 				&log.Id,
 				&log.Timestamp,
 				&log.Duration,
@@ -57,14 +104,20 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 				&log.ClientAddress,
 				&log.ClientName)
 		} else {
-			redis.Scan(entry,
+			_, err = redis.Scan(entry,
 				&log.Id,
 				&log.Timestamp,
 				&log.Duration,
-				nil,
 				&args)
 		}
-
+		if err != nil {
+			logging.Error.Printf("Error during redis.Scan: %v", err)
+			continue
+		}
+		if s.isIDExisting(log.Id) {
+			logging.Warning.Printf("Skipping SlowLog(id=%v)!", log.Id)
+			continue
+		}
 		// This splits up the args into cmd, key, args.
 		argsLen := len(args)
 		if argsLen > 0 {
@@ -84,6 +137,7 @@ func (s *slowLog) FetchSlowLog(size int) ([]SlowLogData, error) {
 
 			}
 		}
+		s.markID(log.Id)
 		slowLogArr = append(slowLogArr, log)
 	}
 	return slowLogArr, err
@@ -99,4 +153,11 @@ func (s *slowLog) Ping() bool {
 		return true
 	}
 	return false
+}
+
+// Destroy close all goroutines and destroy the service
+func (s *slowLog) Destroy() {
+	s.cancel()
+	s.Conn.Close()
+	s = nil
 }
